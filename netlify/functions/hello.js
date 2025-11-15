@@ -1,3 +1,9 @@
-export default async () => {
-  return new Response("Hello from Netlify Function!");
+export default async (request) => {
+  return new Response(
+    JSON.stringify({ message: "Hello from Netlify Function!" }),
+    {
+      headers: { "Content-Type": "application/json" },
+    }
+  );
 };
+
