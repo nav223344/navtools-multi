@@ -1,0 +1,421 @@
+# Multi-Tool Website — Full GitHub-ready Repo (MVP)
+
+> यह document एक complete, deploy-ready GitHub repository का preview है — 3 tools के साथ (PDF Merge, Image Compressor, Age Calculator). यह single-file React starter को replace कर रहा है और अंदर पूरा project structure, मुख्य फाइलें और deployment steps मौजूद हैं।
+
+---
+
+## Project Overview
+
+- **Name:** navtools-multi
+- **Purpose:** Lightweight, mobile-first multi-tool site optimized for SEO & fast client-side tools. Backend serverless function only for PDF merge (secure temporary file handling).
+- **Tools included (MVP):**
+  1. PDF Merge (Serverless function using `pdf-lib`)
+  2. Image Compressor (Client-side via canvas)
+  3. Age Calculator (Client-side JS)
+
+---
+
+## Repo File Tree (what's included)
+
+```
+navtools-multi/
+├─ README.md
+├─ package.json
+├─ netlify.toml
+├─ public/
+│  └─ index.html
+├─ src/
+│  ├─ index.jsx
+│  ├─ App.jsx
+│  ├─ index.css
+│  ├─ components/
+│  │  ├─ PDFMerge.jsx
+│  │  ├─ ImageCompressor.jsx
+│  │  └─ AgeCalculator.jsx
+│  └─ utils/
+│     └─ age.js
+└─ netlify/functions/
+   └─ pdfMerge.js
+```
+
+---
+
+## Key points
+- **Frontend**: React (Vite) + Tailwind-compatible classes (no Tailwind build required for MVP — basic CSS included). Fast, mobile-first UI.
+- **Serverless function**: `netlify/functions/pdfMerge.js` — merges uploaded PDFs using `pdf-lib` and returns a downloadable file. Keeps files in-memory (no persistent storage). Suitable for low-to-medium usage.
+- **Image compression**: purely client-side using Canvas `toBlob()` with quality parameter — zero hosting cost and fast UX.
+- **Age Calculator**: pure client-side JS.
+
+---
+
+## Important: Dependencies
+- Frontend: React, vite
+- Serverless: `pdf-lib`
+
+Example `package.json` dependencies are provided in the repo below.
+
+---
+
+## Files (copy/paste ready)
+
+> **Note:** Code blocks below are the exact files to add to your GitHub repo. For production, split CSS, add tests, and configure a domain & AdSense later.
+
+### package.json
+
+```json
+{
+  "name": "navtools-multi",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "netlify:build": "vite build"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}
+```
+
+---
+
+### netlify/functions/pdfMerge.js
+
+```js
+const { PDFDocument } = require('pdf-lib');
+
+exports.handler = async (event) => {
+  try {
+    // Netlify function receives base64 files via POST JSON { files: [{name, dataBase64}, ...] }
+    if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
+    const body = JSON.parse(event.body);
+    const files = body.files || [];
+    if (!files.length) return { statusCode: 400, body: 'No files provided' };
+
+    const mergedPdf = await PDFDocument.create();
+
+    for (const file of files) {
+      const uint8 = Uint8Array.from(Buffer.from(file.dataBase64, 'base64'));
+      const donor = await PDFDocument.load(uint8);
+      const copiedPages = await mergedPdf.copyPages(donor, donor.getPageIndices());
+      copiedPages.forEach((p) => mergedPdf.addPage(p));
+    }
+
+    const mergedBytes = await mergedPdf.save();
+    const base64 = Buffer.from(mergedBytes).toString('base64');
+
+    return {
+      statusCode: 200,
+      isBase64Encoded: true,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'attachment; filename="merged.pdf"'
+      },
+      body: base64
+    };
+  } catch (err) {
+    return { statusCode: 500, body: 'Internal Server Error: ' + err.message };
+  }
+};
+```
+
+---
+
+### public/index.html
+
+```html
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NavTools — Multi Tool Suite</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+```
+
+---
+
+### src/main.jsx
+
+```jsx
+import React from 'react'
+import { createRoot } from 'react-dom/client'
+import App from './App'
+import './index.css'
+
+createRoot(document.getElementById('root')).render(<App />)
+```
+
+---
+
+### src/index.css
+
+```css
+/* Minimal mobile-first styles */
+:root{--bg:#f7f7fb;--card:#fff}
+body{margin:0;font-family:system-ui,Segoe UI,Roboto,'Noto Sans',Arial}
+.app{min-height:100vh;background:var(--bg);padding:16px}
+.container{max-width:1000px;margin:0 auto}
+.header{display:flex;justify-content:space-between;align-items:center}
+.card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 18px rgba(15,23,42,0.06);margin-bottom:12px}
+.btn{padding:8px 12px;border-radius:8px;border:0;cursor:pointer}
+.small{font-size:13px;color:#555}
+.input{padding:8px;border:1px solid #e5e7eb;border-radius:8px;width:100%}
+```
+
+---
+
+### src/App.jsx
+
+```jsx
+import React from 'react'
+import PDFMerge from './components/PDFMerge'
+import ImageCompressor from './components/ImageCompressor'
+import AgeCalculator from './components/AgeCalculator'
+
+export default function App(){
+  return (
+    <div className="app">
+      <div className="container">
+        <header className="header" style={{marginBottom:16}}>
+          <div>
+            <h1>NavTools — Multi Tool Suite</h1>
+            <div className="small">PDF, Image & Calculator tools — Mobile first</div>
+          </div>
+        </header>
+
+        <section className="card">
+          <h2>PDF Merge</h2>
+          <PDFMerge />
+        </section>
+
+        <section className="card">
+          <h2>Image Compressor</h2>
+          <ImageCompressor />
+        </section>
+
+        <section className="card">
+          <h2>Age Calculator</h2>
+          <AgeCalculator />
+        </section>
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### src/components/PDFMerge.jsx
+
+```jsx
+import React, {useState} from 'react'
+
+export default function PDFMerge(){
+  const [files, setFiles] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  function onFiles(e){
+    setFiles(Array.from(e.target.files))
+  }
+
+  async function merge(){
+    if (!files.length) return alert('PDF files select करो')
+    setLoading(true)
+    try{
+      // read files to base64
+      const readFile = (f) => new Promise((res, rej) => {
+        const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.onerror = rej; r.readAsDataURL(f);
+      })
+      const payload = { files: await Promise.all(files.map(async f => ({ name: f.name, dataBase64: await readFile(f) }))) }
+
+      const resp = await fetch('/.netlify/functions/pdfMerge', { method: 'POST', body: JSON.stringify(payload) })
+      if (!resp.ok) throw new Error('Server error')
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = 'merged.pdf'; a.click()
+    }catch(err){
+      alert('Error: ' + err.message)
+    }finally{ setLoading(false) }
+  }
+
+  return (
+    <div>
+      <input className="input" type="file" accept="application/pdf" multiple onChange={onFiles} />
+      <div style={{marginTop:8}}>
+        <button className="btn" onClick={merge}>{loading? 'Merging...' : 'Merge PDFs'}</button>
+      </div>
+      <div className="small" style={{marginTop:8}}>Note: Files are uploaded to serverless function only during merge and not stored.</div>
+    </div>
+  )
+}
+```
+
+---
+
+### src/components/ImageCompressor.jsx
+
+```jsx
+import React, {useState} from 'react'
+
+export default function ImageCompressor(){
+  const [outUrl,setOutUrl] = useState(null)
+  const [size,setSize] = useState(null)
+
+  async function onFile(e){
+    const f = e.target.files[0]
+    if(!f) return
+    const img = new Image()
+    img.onload = async ()=>{
+      const canvas = document.createElement('canvas')
+      const maxW = 1200
+      let {width, height} = img
+      if (width > maxW) { height = Math.round((maxW/width)*height); width = maxW }
+      canvas.width = width; canvas.height = height
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img,0,0,width,height)
+      canvas.toBlob((blob)=>{
+        setOutUrl(URL.createObjectURL(blob))
+        setSize(Math.round(blob.size/1024))
+      }, 'image/jpeg', 0.7)
+    }
+    img.src = URL.createObjectURL(f)
+  }
+
+  return (
+    <div>
+      <input className="input" type="file" accept="image/*" onChange={onFile} />
+      {outUrl && (
+        <div style={{marginTop:8}}>
+          <img src={outUrl} style={{maxWidth:200,borderRadius:8}} alt="compressed" />
+          <div className="small">Size: {size} KB</div>
+          <a className="btn" href={outUrl} download="compressed.jpg">Download</a>
+        </div>
+      )}
+      <div className="small" style={{marginTop:8}}>Client-side compression, no upload required.</div>
+    </div>
+  )
+}
+```
+
+---
+
+### src/components/AgeCalculator.jsx
+
+```jsx
+import React, {useState} from 'react'
+import { calculateAge } from '../utils/age'
+
+export default function AgeCalculator(){
+  const [dob,setDob] = useState('')
+  const [res,setRes] = useState(null)
+  function onCalc(){
+    if(!dob) return alert('Date select करो')
+    setRes(calculateAge(dob))
+  }
+  return (
+    <div>
+      <input className="input" type="date" value={dob} onChange={(e)=>setDob(e.target.value)} />
+      <div style={{marginTop:8}}>
+        <button className="btn" onClick={onCalc}>Calculate Age</button>
+      </div>
+      {res && <div style={{marginTop:8}} className="small">Age: {res.years} years, {res.months} months, {res.days} days</div>}
+    </div>
+  )
+}
+```
+
+---
+
+### src/utils/age.js
+
+```js
+export function calculateAge(dobStr){
+  const dob = new Date(dobStr)
+  const now = new Date()
+  if (isNaN(dob)) return null
+  let years = now.getFullYear() - dob.getFullYear()
+  let months = now.getMonth() - dob.getMonth()
+  let days = now.getDate() - dob.getDate()
+  if (days < 0) { months -= 1; days += new Date(now.getFullYear(), now.getMonth(), 0).getDate() }
+  if (months < 0) { years -= 1; months += 12 }
+  return { years, months, days }
+}
+```
+
+---
+
+## netlify.toml (deploy settings)
+
+```toml
+[build]
+  command = "npm run netlify:build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+```
+
+---
+
+## README.md (summary & deploy steps)
+
+```
+# NavTools — Multi Tool Suite (MVP)
+
+## Quick start
+1. Clone repo
+2. npm install
+3. npm run dev (local)
+
+## Build for deploy
+1. npm run build
+2. Deploy to Netlify (connect GitHub)
+
+## Netlify Functions
+- pdfMerge function is at netlify/functions/pdfMerge.js
+- POST JSON: { files: [{ name, dataBase64 }, ...] }
+
+## Notes
+- For scale: add file size limits, authentication, and a paid tier for large jobs.
+```
+
+---
+
+## Deployment steps (short)
+
+1. **Create GitHub repo** and push all files.
+2. **Netlify**: Connect GitHub repo, choose build command `npm run netlify:build`, publish `dist`.
+3. **Environment**: No special env vars for MVP. For production, add rate-limits and virus-scan for uploads.
+4. **Domain & SSL**: Add custom domain in Netlify and enable DNS.
+5. **AdSense readiness**: Add Privacy Policy, Terms, and contact email; wait for approval.
+
+---
+
+## What I did now
+- Prepared full, copy-paste ready repo content here. ✅
+
+---
+
+## Next actions I can perform for you (choose one):
+1. Create a ZIP of this repo and provide download link.
+2. Create GitHub-ready commit patch (diff) you can apply.
+3. Walk you through deploying to Netlify step-by-step (in Hindi).
+4. Add Email-based auth & small admin panel for downloads.
+
+
+*— End of repo preview —*
